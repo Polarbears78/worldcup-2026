@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { fetchLive, matchTeams } from './live.js'
 
 const POLL_MS = 60000 // data.json 폴링 주기 (60초)
 const DATA_URL = `${import.meta.env.BASE_URL}data.json`
+const LIVE_CFG_URL = `${import.meta.env.BASE_URL}live-config.json`
 
 function scoreClass(s) {
   if (s === null) return 'score upcoming'
@@ -14,7 +16,10 @@ function scoreText(s) {
   return s.replace('-', ' - ')
 }
 
-function Match({ m, today }) {
+function Match({ m, today, live }) {
+  // live 오버레이가 있으면 스코어를 덮어쓰고 LIVE 표시
+  const score = live ? live.score : m[3]
+  const isLive = live ? live.live : (m[3] === 'live')
   return (
     <div className={'match' + (m[0] === today ? ' today' : '')}>
       <div className="date">{m[0]}</div>
@@ -22,16 +27,27 @@ function Match({ m, today }) {
         <div className="teams">{m[1]}</div>
         <div className="venue">{m[2]}</div>
       </div>
-      <div className={scoreClass(m[3])}>{scoreText(m[3])}</div>
+      <div className={scoreClass(score)}>
+        {scoreText(score)}
+        {isLive && score !== 'live' && <span className="live-tick"> ●</span>}
+      </div>
     </div>
   )
 }
 
-function GroupCard({ g, today }) {
+function GroupCard({ g, today, liveByKey }) {
   return (
     <div className="group-card">
       <h3><span className="badge">{g.id}</span> Group {g.id}</h3>
-      {g.matches.map((m, i) => <Match key={i} m={m} today={today} />)}
+      {g.matches.map((m, i) => {
+        const mt = matchTeams(m[1])
+        const ov = mt && liveByKey ? liveByKey[mt.key] : null
+        // 라이브 득점을 화면 표기 순서대로 재조립
+        const live = ov
+          ? { score: `${ov.goals[mt.ordered[0]]}-${ov.goals[mt.ordered[1]]}`, live: ov.live }
+          : null
+        return <Match key={i} m={m} today={today} live={live} />
+      })}
       <table className="standings">
         <thead><tr><th>순위</th><th>팀</th><th className="pts">승점</th></tr></thead>
         <tbody>
@@ -55,7 +71,7 @@ function GroupCard({ g, today }) {
   )
 }
 
-function Schedule({ groups, today }) {
+function Schedule({ groups, today, liveByKey }) {
   const [filter, setFilter] = useState(null)
   const shown = filter ? groups.filter(g => g.id === filter) : groups
   return (
@@ -66,7 +82,7 @@ function Schedule({ groups, today }) {
           <button key={g.id} className={filter === g.id ? 'active' : ''} onClick={() => setFilter(g.id)}>{g.id}</button>
         ))}
       </div>
-      <div>{shown.map(g => <GroupCard key={g.id} g={g} today={today} />)}</div>
+      <div>{shown.map(g => <GroupCard key={g.id} g={g} today={today} liveByKey={liveByKey} />)}</div>
     </section>
   )
 }
@@ -126,17 +142,38 @@ export default function App() {
   const [tab, setTab] = useState('schedule')
   const [updatedAt, setUpdatedAt] = useState(null)
   const [error, setError] = useState(false)
+  const [liveByKey, setLiveByKey] = useState(null)
+  const [liveState, setLiveState] = useState({ on: false, count: 0, error: null })
 
   const load = useCallback(async () => {
+    // 1) data.json (기본 데이터)
     try {
       const res = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('fetch failed')
-      const json = await res.json()
-      setData(json)
+      setData(await res.json())
       setError(false)
       setUpdatedAt(new Date())
     } catch (e) {
       setError(true)
+    }
+    // 2) 라이브 오버레이 (설정돼 있으면)
+    try {
+      const cfgRes = await fetch(`${LIVE_CFG_URL}?t=${Date.now()}`, { cache: 'no-store' })
+      const cfg = cfgRes.ok ? await cfgRes.json() : null
+      if (cfg && cfg.enabled) {
+        const r = await fetchLive(cfg)
+        if (r.ok) {
+          setLiveByKey(r.byKey)
+          setLiveState({ on: true, count: r.count, error: null })
+        } else {
+          setLiveState({ on: true, count: 0, error: r.error })
+        }
+      } else {
+        setLiveByKey(null)
+        setLiveState({ on: false, count: 0, error: null })
+      }
+    } catch (e) {
+      setLiveState({ on: true, count: 0, error: 'config-error' })
     }
   }, [])
 
@@ -149,9 +186,10 @@ export default function App() {
   }, [load])
 
   const liveCount = useMemo(() => {
+    if (liveByKey) return Object.values(liveByKey).filter(v => v.live).length
     if (!data) return 0
     return data.groups.reduce((n, g) => n + g.matches.filter(m => m[3] === 'live').length, 0)
-  }, [data])
+  }, [data, liveByKey])
 
   if (!data) {
     return (
@@ -165,6 +203,12 @@ export default function App() {
     ? updatedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : '-'
 
+  // 라이브 소스 상태 라벨
+  let liveLabel
+  if (liveState.on && !liveState.error) liveLabel = `🟢 라이브 API 연결됨 (${liveState.count}경기)`
+  else if (liveState.on && liveState.error) liveLabel = `🟠 라이브 API 오류: ${liveState.error}`
+  else liveLabel = '⚪ data.json 기준 (라이브 API 미설정)'
+
   return (
     <>
       <header>
@@ -175,6 +219,7 @@ export default function App() {
           {liveCount > 0 && <span className="live-dot">● LIVE {liveCount}경기 진행 중</span>}
           <span className="sync">⟳ 자동 갱신 {timeStr}{error ? ' (연결 끊김)' : ''}</span>
         </div>
+        <div className="live-src">{liveLabel}</div>
       </header>
 
       <div className="wrap">
@@ -184,14 +229,14 @@ export default function App() {
           ))}
         </nav>
 
-        {tab === 'schedule' && <Schedule groups={data.groups} today={data.meta.today} />}
+        {tab === 'schedule' && <Schedule groups={data.groups} today={data.meta.today} liveByKey={liveByKey} />}
         {tab === 'bracket' && <Bracket bracket={data.bracket} />}
         {tab === 'venues' && <Venues venues={data.venues} />}
       </div>
 
       <footer>
         데이터 출처: {data.meta.sources.join(' · ')}<br />
-        60초마다 data.json을 자동 폴링합니다. 스케줄 작업이 갱신하면 새로고침 없이 반영됩니다.
+        data.json(기본) + 라이브 API(설정 시)를 60초마다 폴링합니다. 새로고침 없이 반영됩니다.
       </footer>
     </>
   )

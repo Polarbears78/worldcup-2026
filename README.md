@@ -47,6 +47,38 @@ npm run build && npm run preview
 3. `main`에 푸시될 때마다 `.github/workflows/deploy.yml`이 자동 빌드·배포합니다.
    배포 URL: `https://<USERNAME>.github.io/worldcup-2026/`
 
+## 실시간 스코어 (라이브 API)
+
+기본 동작은 `data.json`(하루 1회 스케줄 갱신)이고, 그 위에 **라이브 API 오버레이**를 얹어
+진행 중 경기의 스코어를 분 단위로 덮어쓸 수 있습니다. 설정은 `public/live-config.json`에서 합니다.
+
+정적 사이트(GitHub Pages)는 외부 API를 직접 부르면 **CORS로 차단**되고 키가 노출되므로,
+키를 숨겨주는 **Cloudflare Worker 프록시**(`cloudflare/worker.js`)를 두는 방식을 권장합니다.
+
+### 설정 절차 (권장)
+1. **무료 키 발급** — https://www.football-data.org/client/register (이메일만, 1분)
+2. **Worker 배포** — `cloudflare/worker.js` 파일 주석의 안내대로 Cloudflare에 배포하고,
+   Secret `FOOTBALL_DATA_KEY`에 발급받은 키를 넣는다. 배포되면 `https://...workers.dev` URL이 나온다.
+3. **앱 연결** — `public/live-config.json`을 아래처럼 수정 후 커밋·푸시:
+   ```json
+   {
+     "enabled": true,
+     "provider": "football-data",
+     "endpoint": "https://<당신의-워커>.workers.dev",
+     "apiKey": "",
+     "corsProxy": "",
+     "pollSeconds": 60
+   }
+   ```
+4. 앱 상단에 `🟢 라이브 API 연결됨 (N경기)`가 뜨면 성공. 진행 중 경기 스코어가 60초마다 갱신된다.
+
+### 프록시 없이 (비권장)
+워커가 부담되면 공용 CORS 프록시를 쓸 수 있으나(키가 노출되고 불안정),
+`endpoint`는 football-data URL, `apiKey`에 키, `corsProxy`에 프록시 접두사(`https://corsproxy.io/?url=` 등)를 넣는다.
+
+> 참고: football-data.org 무료 티어는 분당 10요청 제한이며, 분 단위 라이브 갱신 범위는 제공자 정책을 따른다.
+> 라이브 API가 비활성/오류여도 앱은 항상 `data.json`으로 폴백한다(화면이 비지 않음).
+
 ## 데이터 갱신 (자동)
 
 `public/data.json`만 바꾸면 됩니다. 매일 도는 스케줄 작업이 최신 결과로 이 파일을 갱신하고

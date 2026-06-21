@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "provider": "football-data",
+  "endpoint": "https://api.football-data.org/v4/competitions/WC/matches",
+  "apiKey": "",
+  "corsProxy": "",
+  "pollSeconds": 60,
+  "_help": "라이브 연동 방법은 README.md의 '실시간 스코어(라이브 API)' 섹션 참고. 권장: Cloudflare Worker 배포 후 endpoint를 워커 URL로, apiKey는 비워둠(키는 워커가 보관). enabled를 true로 바꾸면 활성화."
+}
