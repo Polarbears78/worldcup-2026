@@ -19,10 +19,10 @@ function scoreText(s) {
 function Match({ m, today, live }) {
   // live 오버레이가 있으면 스코어를 덮어쓰고 LIVE 표시
   const score = live ? live.score : m[3]
-  const isLive = live ? live.live : (m[3] === 'live' || m[4] === true)
+  const isLive = live ? live.live : (m[3] === 'live' || m[5] === true)
   return (
     <div className={'match' + (m[0] === today ? ' today' : '')}>
-      <div className="date">{m[0]}</div>
+      <div className="date">{m[0]}{m[4] && <span className="time">{m[4]}</span>}</div>
       <div>
         <div className="teams">{m[1]}</div>
         <div className="venue">{m[2]}</div>
@@ -188,7 +188,7 @@ export default function App() {
   const liveCount = useMemo(() => {
     if (liveByKey) return Object.values(liveByKey).filter(v => v.live).length
     if (!data) return 0
-    return data.groups.reduce((n, g) => n + g.matches.filter(m => m[3] === 'live' || m[4] === true).length, 0)
+    return data.groups.reduce((n, g) => n + g.matches.filter(m => m[3] === 'live' || m[5] === true).length, 0)
   }, [data, liveByKey])
 
   if (!data) {
@@ -214,7 +214,7 @@ export default function App() {
       <header>
         <h1>🏆 2026 FIFA 월드컵</h1>
         <div className="sub">2026.6.11 ~ 7.19 · 🇨🇦 캐나다 · 🇲🇽 멕시코 · 🇺🇸 미국 공동 개최<br />사상 첫 48개국 · 12개 조 · 총 104경기</div>
-        <div className="meta">기준일 {data.meta.asOf} · {data.meta.status}</div>
+        <div className="meta">기준일 {data.meta.asOf} · {data.meta.status} · ⏰ 모든 시각 한국시각(KST)</div>
         <div className="live-bar">
           {liveCount > 0 && <span className="live-dot">● LIVE {liveCount}경기 진행 중</span>}
           <span className="sync">⟳ 자동 갱신 {timeStr}{error ? ' (연결 끊김)' : ''}</span>

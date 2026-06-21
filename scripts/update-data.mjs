@@ -53,8 +53,12 @@ async function main() {
     const finished = st === 'FINISHED'
     const ft = (m.score && m.score.fullTime) || {}
     const hasScore = ft.home != null && ft.away != null
+    // UTC → KST(UTC+9) 변환: 날짜(M/D)와 시각(HH:MM)
+    const kst = new Date(new Date(m.utcDate).getTime() + 9 * 3600 * 1000)
+    const kdate = `${kst.getUTCMonth() + 1}/${kst.getUTCDate()}`
+    const ktime = `${String(kst.getUTCHours()).padStart(2, '0')}:${String(kst.getUTCMinutes()).padStart(2, '0')}`
     idx[`${gl}|${key}`] = {
-      live, finished,
+      live, finished, date: kdate, time: ktime,
       goals: hasScore ? { [homeKo]: ft.home, [awayKo]: ft.away } : null,
     }
   }
@@ -76,9 +80,11 @@ async function main() {
         newScore = null // 미시작(예정) — API 기준으로 정리
       }
       if (m[3] !== newScore) scoreUpdates++
+      m[0] = hit.date   // KST 날짜
       m[3] = newScore
-      if (newLive) m[4] = true
-      else if (m.length > 4) m.length = 4
+      m[4] = hit.time   // KST 킥오프 시각 (HH:MM)
+      if (newLive) m[5] = true
+      else if (m.length > 5) m.length = 5
     }
   }
   if (unmatched.length) console.log('UNMATCHED:', unmatched.join(' | '))
@@ -107,9 +113,9 @@ async function main() {
     })
   }
 
-  // 3) 메타 갱신
-  const now = new Date()
-  const y = now.getUTCFullYear(), mo = now.getUTCMonth() + 1, d = now.getUTCDate()
+  // 3) 메타 갱신 (KST 기준)
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1000)
+  const y = nowKst.getUTCFullYear(), mo = nowKst.getUTCMonth() + 1, d = nowKst.getUTCDate()
   data.meta.asOf = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   data.meta.today = `${mo}/${d}`
   const allFinished = (matchesRes.matches || [])
