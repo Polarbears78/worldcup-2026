@@ -1,0 +1,73 @@
+name: Live score update
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # 10분마다 (GitHub 사정에 따라 다소 지연 가능)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Deploy 워크플로와 같은 'pages' 그룹 → 동시 배포 충돌 방지
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.upd.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Fetch live scores → data.json
+        id: upd
+        env:
+          FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
+        run: |
+          OUT=$(node scripts/update-data.mjs)
+          echo "$OUT"
+          if echo "$OUT" | grep -q CHANGED; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit data.json
+        if: steps.upd.outputs.changed == 'true'
+        run: |
+          git config user.name "wc-live-bot"
+          git config user.email "actions@github.com"
+          git add public/data.json
+          git commit -m "data: 라이브 스코어 자동 갱신 ($(date -u +%Y-%m-%dT%H:%MZ))"
+          git pull --rebase --autostash origin main || true
+          git push origin main
+
+      - name: Build
+        if: steps.upd.outputs.changed == 'true'
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload Pages artifact
+        if: steps.upd.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

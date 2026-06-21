@@ -19,7 +19,7 @@ function scoreText(s) {
 function Match({ m, today, live }) {
   // live 오버레이가 있으면 스코어를 덮어쓰고 LIVE 표시
   const score = live ? live.score : m[3]
-  const isLive = live ? live.live : (m[3] === 'live')
+  const isLive = live ? live.live : (m[3] === 'live' || m[4] === true)
   return (
     <div className={'match' + (m[0] === today ? ' today' : '')}>
       <div className="date">{m[0]}</div>
@@ -188,7 +188,7 @@ export default function App() {
   const liveCount = useMemo(() => {
     if (liveByKey) return Object.values(liveByKey).filter(v => v.live).length
     if (!data) return 0
-    return data.groups.reduce((n, g) => n + g.matches.filter(m => m[3] === 'live').length, 0)
+    return data.groups.reduce((n, g) => n + g.matches.filter(m => m[3] === 'live' || m[4] === true).length, 0)
   }, [data, liveByKey])
 
   if (!data) {
@@ -205,9 +205,9 @@ export default function App() {
 
   // 라이브 소스 상태 라벨
   let liveLabel
-  if (liveState.on && !liveState.error) liveLabel = `🟢 라이브 API 연결됨 (${liveState.count}경기)`
+  if (liveState.on && !liveState.error) liveLabel = `🟢 라이브 API 직결 (${liveState.count}경기)`
   else if (liveState.on && liveState.error) liveLabel = `🟠 라이브 API 오류: ${liveState.error}`
-  else liveLabel = '⚪ data.json 기준 (라이브 API 미설정)'
+  else liveLabel = '🟢 라이브 자동 갱신 (GitHub Actions · 10분 주기)'
 
   return (
     <>

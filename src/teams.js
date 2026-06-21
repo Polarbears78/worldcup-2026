@@ -38,7 +38,7 @@ export const EN_TO_KO = {
   'new zealand': '뉴질랜드',
   // Group H
   'spain': '스페인',
-  'cape verde': '카보베르데', 'cabo verde': '카보베르데',
+  'cape verde': '카보베르데', 'cabo verde': '카보베르데', 'cape verde islands': '카보베르데',
   'saudi arabia': '사우디',
   'uruguay': '우루과이',
   // Group I
